@@ -18,10 +18,6 @@ class SageMakerHandler:
         self.xgboost = None
         self.endpoint_name = None
 
-    def upload_to_s3(self, file_path):
-        with open(file_path, 'rb') as f:
-            boto3.Session().resource('s3').Bucket(self.bucket).Object(os.path.join(self.subpasta_dataset, 'train', self.key_train)).upload_fileobj(f)
-
     def configure_estimator(self):
         self.xgboost = sagemaker.estimator.Estimator(
             image_uri=self.container,
@@ -53,6 +49,18 @@ class SageMakerHandler:
     def deploy_model(self, endpoint_name=None):
         if endpoint_name is None:
             endpoint_name = f'{self.ticker}-endpoint'
+            
+        # Excluir a configuração do endpoint existente, se houver
+        sagemaker_client = boto3.client('sagemaker')
+        try:
+            sagemaker_client.delete_endpoint_config(EndpointConfigName=endpoint_name)
+        except sagemaker_client.exceptions.ClientError as e:
+            if 'ValidationException' in str(e):
+                print(f'Endpoint configuration {endpoint_name} does not exist or has already been deleted.')
+            else:
+                raise
+        
+        # Implantar o modelo
         self.xgboost_regressor = self.xgboost.deploy(initial_instance_count=1, instance_type='ml.m4.xlarge', endpoint_name=endpoint_name)
         self.endpoint_name = self.xgboost_regressor.endpoint_name
 
@@ -65,3 +73,5 @@ class SageMakerHandler:
         )
         result = response['Body'].read().decode('utf-8')
         return result
+    
+    

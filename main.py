@@ -7,8 +7,8 @@ from estrategia.estrategia1 import Estrategia1
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 async def main():
-    #estrategia = Estrategia1(bucket_name='data-lake-tc3', ticker='BTCUSDT', timeframe='1h', period='1ano')
-    estrategia = Estrategia1(bucket_name='data-lake-tc3', bucket_name_model='models-ml-tc3', ticker='BTCUSDT', timeframe='1h', period='3anos')
+    #estrategia = Estrategia1(bucket_name='datalake-tc3', ticker='BTCUSDT', timeframe='1h', period='1ano')
+    estrategia = Estrategia1(bucket_name='datalake-tc3', bucket_name_model='models-bucket-tc3', ticker='BTCUSDT', timeframe='15m', period='1ano')
     result = await estrategia.run_backtest()
 
 if __name__ == '__main__':
