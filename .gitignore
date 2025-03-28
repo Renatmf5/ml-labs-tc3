@@ -19,6 +19,7 @@ data/
 *.zip
 *.h5
 *.pdf
+*.png
 
 *.parquet
 .parquet.crc
