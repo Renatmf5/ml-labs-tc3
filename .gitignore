@@ -18,8 +18,9 @@ data/
 *.parquet
 .parquet.crc
 
-analytics/reports
-/reports/
+analytics/reports/*
+!/reports/.gitkeep
+!/reports/image/
 
-modelosMLDP/dataModels
-/dataModels/
+/dataModels/*
+!/dataModels/.gitkeep
