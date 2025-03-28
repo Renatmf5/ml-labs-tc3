@@ -20,6 +20,7 @@ data/
 *.h5
 *.pdf
 *.png
+*.keras
 
 *.parquet
 .parquet.crc
