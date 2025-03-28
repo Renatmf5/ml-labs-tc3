@@ -14,13 +14,12 @@ venv/
 *.log
 *.csv
 data/
+*.pkl
+*.json
+*.zip
+*.h5
+*.pdf
 
 *.parquet
 .parquet.crc
 
-analytics/reports/*
-!/reports/.gitkeep
-!/reports/image/
-
-/dataModels/*
-!/dataModels/.gitkeep
