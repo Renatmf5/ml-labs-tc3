@@ -37,13 +37,13 @@ class MLPClassificationModel:
         # Criar o modelo MLP ajustado
         model = MLPClassifier(
             hidden_layer_sizes=(128, 64),  # Camadas ajustadas
-            max_iter=2000,  # Aumenta as iterações
+            max_iter=500,  # Aumenta as iterações
             activation='relu',  # Melhor para redes profundas
             solver='adam',
             random_state=3,
             validation_fraction=0.2,
             early_stopping=True,  # Para evitar overfitting
-            n_iter_no_change=20
+            n_iter_no_change=10
         )
 
         # Treinar o modelo com os pesos calculados
@@ -54,7 +54,7 @@ class MLPClassificationModel:
         
         # Fazer upload do modelo treinado e do scaler para o S3
         s3_client = boto3.client('s3')
-        s3_client.upload_file(self.model_path, self.bucket, f'{self.subpasta_modelo}/mlp_classification_model.pkl')
+        #s3_client.upload_file(self.model_path, self.bucket, f'{self.subpasta_modelo}/mlp_classification_model.pkl')
         s3_client.upload_file(self.scaler_path, self.bucket, self.scaler_key)
         
         return scaler

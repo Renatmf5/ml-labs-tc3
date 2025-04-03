@@ -10,7 +10,7 @@ import boto3
 class CryptoTradingEnv(gym.Env):
     """Ambiente personalizado para treinamento de RL no mercado de criptomoedas."""
     
-    def __init__(self, df, window_size, stop_loss_pct=0.007, take_profit_pct=0.007, tax=0.0008):
+    def __init__(self, df, window_size, stop_loss_pct=0.02, take_profit_pct=0.02, tax=0.0008):
         super().__init__()
         self.df = df
         self.window_size = window_size
@@ -27,7 +27,7 @@ class CryptoTradingEnv(gym.Env):
         # Definir espaços de ação e observação
         self.action_space = gym.spaces.Discrete(3)  # 0: Sell, 1: Buy, 2: Hold
         self.observation_space = gym.spaces.Box(
-            low=-np.inf, high=np.inf, shape=(window_size, 4), dtype=np.float32
+            low=-0, high=1, shape=(window_size, 22), dtype=np.float32
             #low=0, high=1, shape=(window_size, 4), dtype=np.float3
         )
         
@@ -69,7 +69,11 @@ class CryptoTradingEnv(gym.Env):
     def _next_observation(self):
         """Retorna a observação atual baseada na janela de dados."""  
         #return self.df.iloc[self.current_step - self.window_size:self.current_step].values.astype(np.float32)
-        return self.df[['pred_lstm_proba', 'pred_xgb_proba', 'pred_mlp_proba', 'ensemble_signal']].iloc[self.current_step - self.window_size:self.current_step].values.astype(np.float32)
+        obs = self.df[['sma_5_diff', 'sma_20_diff', 'sma_50_diff', 'ema_20_diff','mean_proportion_BTC', 'std_proportion_BTC', 'proportion_taker_BTC', 
+        'z_score_BTC','cci_20', 'stc', 'roc_10', 'cmo', 'obv', 'mfi', 'tsi_stoch', 'dmi_plus',
+       'dmi_minus', 'adx', 'pred_lstm_proba', 'pred_xgb_proba',
+       'pred_mlp_proba', 'ensemble_signal']].iloc[self.current_step - self.window_size:self.current_step]. values.astype(np.float32)
+        return obs
 
     def step(self, action):
         """Executa uma ação e avança para o próximo estado."""
@@ -82,6 +86,8 @@ class CryptoTradingEnv(gym.Env):
         low = self.df['low'].iloc[self.current_step]
         high = self.df['high'].iloc[self.current_step]
         reward = 0
+        
+        trade_penalty = 0.5
         
         # Verificar stop loss e take profit
         if self.current_position == "buy":
@@ -98,7 +104,7 @@ class CryptoTradingEnv(gym.Env):
                     "entry_price": self.entry_price,
                     "exit_price": low,
                     "return": trade_return,
-                    "signal": "stop_loss",
+                    "signal": "buy",
                     "success": False,
                     "investment_value": self.current_capital + profit
                 })
@@ -107,7 +113,8 @@ class CryptoTradingEnv(gym.Env):
                 self.current_capital += profit
                 self.gross_capital += gross_profit  # Atualizar gross_capital
                 self.stop_loss_count += 1  # Incrementar contador de stop loss
-                reward = trade_return
+                penalty = min(abs(trade_return) * 0.5, 10)  # Penalização limitada a 10%
+                reward = -10 + (trade_return * 5)
             elif high >= self.entry_price * (1 + self.take_profit_pct):
                 quantity = self.current_capital / self.entry_price
                 profit = (self.entry_price * (1 + self.take_profit_pct) - self.entry_price) * quantity
@@ -121,7 +128,7 @@ class CryptoTradingEnv(gym.Env):
                     "entry_price": self.entry_price,
                     "exit_price": high,
                     "return": trade_return,
-                    "signal": "take_profit",
+                    "signal": "buy",
                     "success": True,
                     "investment_value": self.current_capital + profit
                 })
@@ -130,7 +137,7 @@ class CryptoTradingEnv(gym.Env):
                 self.current_capital += profit
                 self.gross_capital += gross_profit  # Atualizar gross_capital
                 self.take_profit_count += 1  # Incrementar contador de take profit
-                reward = trade_return * 2
+                reward = 10 + (trade_return * 5)
         elif self.current_position == "sell":
             if high >= self.entry_price * (1 + self.stop_loss_pct):
                 quantity = self.current_capital / self.entry_price
@@ -145,7 +152,7 @@ class CryptoTradingEnv(gym.Env):
                     "entry_price": self.entry_price,
                     "exit_price": high,
                     "return": trade_return,
-                    "signal": "stop_loss",
+                    "signal": "sell",
                     "success": False,
                     "investment_value": self.current_capital + profit
                 })
@@ -154,7 +161,8 @@ class CryptoTradingEnv(gym.Env):
                 self.current_capital += profit
                 self.gross_capital += gross_profit  # Atualizar gross_capital
                 self.stop_loss_count += 1  # Incrementar contador de stop loss
-                reward = trade_return
+                penalty = min(abs(trade_return) * 0.5, 10)  # Penalização limitada a 10%
+                reward = -10 + (trade_return * 5)
             elif low <= self.entry_price * (1 - self.take_profit_pct):
                 quantity = self.current_capital / self.entry_price
                 profit = (self.entry_price - self.entry_price * (1 - self.take_profit_pct)) * quantity
@@ -168,7 +176,7 @@ class CryptoTradingEnv(gym.Env):
                     "entry_price": self.entry_price,
                     "exit_price": low,
                     "return": trade_return,
-                    "signal": "take_profit",
+                    "signal": "sell",
                     "success": True,
                     "investment_value": self.current_capital + profit
                 })
@@ -177,7 +185,7 @@ class CryptoTradingEnv(gym.Env):
                 self.current_capital += profit
                 self.gross_capital += gross_profit  # Atualizar gross_capital
                 self.take_profit_count += 1  # Incrementar contador de take profit
-                reward = trade_return * 2
+                reward = 10 + (trade_return * 5)
         
         
         if action == 1:  # Buy
@@ -186,6 +194,7 @@ class CryptoTradingEnv(gym.Env):
                 self.entry_price = price
                 self.entry_candle = self.current_step
                 self.long_trades_count += 1
+                reward -= trade_penalty
             elif self.current_position == "sell":  # Fecha uma venda
                 quantity = self.current_capital / self.entry_price
                 profit = (self.entry_price - price) * quantity
@@ -196,9 +205,14 @@ class CryptoTradingEnv(gym.Env):
                 profit -= tax_amount
                 trade_duration = self.current_step - self.entry_candle
                 if trade_duration >= 1:
-                    if trade_return > 0.5:
+                    if trade_return > 0:  # Trade lucrativo
+                        reward = trade_return * 3  # Multiplica o retorno positivo por 4
+                        if trade_return > 0.5:  # Incentiva ganhos maiores que 50%
+                            reward = 5 + (trade_return * 5)  # Recompensa adicional
+                    elif trade_return < -0.5:  # Trade com prejuízo
+                        reward = trade_return * 4
+                    else: 
                         reward = trade_return * 2
-                    reward = trade_return
                     if trade_duration > 90:
                         penalty = (trade_duration - 90) * 2  # Penalização de 0.01 por candle após 90
                         reward -= penalty
@@ -231,6 +245,7 @@ class CryptoTradingEnv(gym.Env):
                 self.entry_price = price
                 self.entry_candle = self.current_step
                 self.short_trades_count += 1
+                reward -= trade_penalty
             elif self.current_position == "buy":  # Fecha uma compra
                 quantity = self.current_capital / self.entry_price
                 profit = (price - self.entry_price) * quantity
@@ -241,9 +256,14 @@ class CryptoTradingEnv(gym.Env):
                 profit -= tax_amount
                 trade_duration = self.current_step - self.entry_candle
                 if trade_duration >= 1:
-                    if trade_return > 0.5:
+                    if trade_return > 0:  # Trade lucrativo
+                        reward = trade_return * 3  # Multiplica o retorno positivo por 4
+                        if trade_return > 0.5:  # Incentiva ganhos maiores que 50%
+                            reward = 5 + (trade_return * 5)  # Recompensa adicional
+                    elif trade_return < -0.5:  # Trade com prejuízo
+                        reward = trade_return * 4
+                    else: 
                         reward = trade_return * 2
-                    reward = trade_return
                     if trade_duration > 90:
                         penalty = (trade_duration - 90) * 2  # Penalização de 0.01 por candle após 90
                         reward -= penalty
@@ -317,6 +337,8 @@ class CryptoTradingEnv(gym.Env):
                 "win_count": self.win_count,
                 "loss_count": self.loss_count,
                 "final_gross_capital": f"{self.gross_capital:.2f}"
+                #"buy_win_rate": "0.0%",
+                #"sell_win_rate": "0.0%"
             }
 
         # Maior ganho
@@ -339,6 +361,14 @@ class CryptoTradingEnv(gym.Env):
         trades_df['loss'] = trades_df['return'] < 0
         max_consecutive_losses = trades_df['loss'].astype(int).groupby(trades_df['loss'].ne(trades_df['loss'].shift()).cumsum()).cumsum().max()
 
+        # Porcentagem de trades lucrativos para BUY
+        buy_trades = trades_df[trades_df['signal'] == 'buy']
+        buy_win_rate = (buy_trades['success'].mean() * 100) if not buy_trades.empty else 0
+
+        # Porcentagem de trades lucrativos para SELL
+        sell_trades = trades_df[trades_df['signal'] == 'sell']
+        sell_win_rate = (sell_trades['success'].mean() * 100) if not sell_trades.empty else 0
+
         return {
             "total_trades": total_trades,
             "win_rate": f"{(acertos / total_trades * 100):.1f}" if total_trades > 0 else "0.0",
@@ -357,7 +387,9 @@ class CryptoTradingEnv(gym.Env):
             "short_trades_count": self.short_trades_count,
             "win_count": self.win_count,
             "loss_count": self.loss_count,
-            "final_gross_capital": f"{self.gross_capital:.2f}"  # Adicionar final_gross_capital
+            "final_gross_capital": f"{self.gross_capital:.2f}"
+            #"buy_win_rate": f"{buy_win_rate:.1f}%",
+            #"sell_win_rate": f"{sell_win_rate:.1f}%"
         }
 
 class CryptoTradingModel:
@@ -378,8 +410,15 @@ class CryptoTradingModel:
         
         env = DummyVecEnv([lambda: env])  # Agora podemos criar o DummyVecEnv
         
-        model = PPO('MlpPolicy', env, verbose=1)
-        model.learn(total_timesteps=200000)
+        model = PPO('MlpPolicy', env, 
+            verbose=1, 
+            learning_rate= 0.0003,  # Decaimento linear
+            n_steps=4096,                       # Reduzido para maior estabilidade
+            gamma=0.996,                         # Ajustado para priorizar recompensas futuras
+            gae_lambda=0.95,                    # Mantido no padrão
+            clip_range=0.1,                     # Aumentado para maior exploração
+            ent_coef=0.01)                      # Incentivar exploração
+        model.learn(total_timesteps=500000)
         model.save(self.model_path)
         
         print(env.envs[0])
@@ -391,7 +430,7 @@ class CryptoTradingModel:
         
         # Salvar o modelo no S3
         s3_client = boto3.client('s3')
-        s3_client.upload_file(self.model_path, self.bucket, f'{self.subpasta_modelo}/ppo_trading_model.zip')
+        #s3_client.upload_file(self.model_path, self.bucket, f'{self.subpasta_modelo}/ppo_trading_model.zip')
 
         return model
 

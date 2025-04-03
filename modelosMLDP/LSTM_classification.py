@@ -61,7 +61,7 @@ class LSTMClassificationModel:
         
         # Fazer upload do modelo treinado e do scaler para o S3
         s3_client = boto3.client('s3')
-        s3_client.upload_file(self.model_path, self.bucket, f'{self.subpasta_modelo}/lstm_classification_model.keras')
+        #s3_client.upload_file(self.model_path, self.bucket, f'{self.subpasta_modelo}/lstm_classification_model.keras')
         s3_client.upload_file(self.scaler_path, self.bucket, self.scaler_key)
         
         return scaler

@@ -20,6 +20,8 @@ class Backtester:
         self.cumulative_returns = [0]  # Lista para armazenar o retorno acumulado de cada fatia
         self.initial_investment = 1000  # Valor inicial do investimento
         self.current_investment = self.initial_investment  # Valor atual do investimento
+        self.scaler_path_ppo = os.path.join("modelosMLDP", "dataModels", "ppo_scaler.pkl")
+        self.scaler_key_ppo = f'models/{ticker}/scaler/{ticker}_ppo_scaler.pkl'
         
     def execute_model_trainer(self, type, train_data, test_data):
         if type == 'completa':
@@ -79,25 +81,62 @@ class Backtester:
            
            meta_X_train = scaler_ensemble.transform(meta_X_train)
            meta_X_test = scaler_ensemble.transform(meta_X_test)
+           
+           # Selecionar as colunas finais para o RL PPO
+           selected_columns_RL_PPO = ['sma_5_diff', 'sma_20_diff', 'sma_50_diff', 'ema_20_diff', 'mean_proportion_BTC', 'std_proportion_BTC', 'proportion_taker_BTC', 'z_score_BTC','cci_20', 'stc', 'roc_10', 'cmo', 'obv', 'mfi', 'tsi_stoch', 'dmi_plus', 'dmi_minus', 'adx',
+            'pred_lstm_proba', 'pred_xgb_proba', 'pred_mlp_proba', 'ensemble_signal', 'low', 'high', 'close']
+           
            # Separar as colunas de meta_X_train
            train_data = train_data[:min_length_train]
-           train_data['pred_lstm_proba'] = meta_X_train[:, 0]
-           train_data['pred_xgb_proba'] = meta_X_train[:, 1]
-           train_data['pred_mlp_proba'] = meta_X_train[:, 2]
-           train_data['ensemble_signal'] = train_data['signal']
+           
+           # Selecionar as colunas de interesse para escalonamento
+           train_data_features = train_data[['sma_5_diff', 'sma_20_diff', 'sma_50_diff', 'ema_20_diff', 'mean_proportion_BTC', 'std_proportion_BTC', 'proportion_taker_BTC', 'z_score_BTC','cci_20', 'stc', 'roc_10', 'cmo', 'obv', 'mfi', 'tsi_stoch', 'dmi_plus', 'dmi_minus', 'adx']]
+
+            # Escalonar os dados com MinMaxScaler
+           scaler_ppo = MinMaxScaler(feature_range=(0, 1))
+           train_data_scaled = scaler_ppo.fit_transform(train_data_features)
+           
+           # Converter de volta para DataFrame
+           train_data_scaled = pd.DataFrame(train_data_scaled, columns=train_data_features.columns)
+
+           train_data_scaled['pred_lstm_proba'] = meta_X_train[:, 0]
+           train_data_scaled['pred_xgb_proba'] = meta_X_train[:, 1]
+           train_data_scaled['pred_mlp_proba'] = meta_X_train[:, 2]
+           train_data_scaled['ensemble_signal'] = train_data['signal'].values
+           # Adicionar as colunas 'low', 'high' e 'close' ao test_data escalonado
+           train_data_scaled['low'] = train_data['low'].values
+           train_data_scaled['high'] = train_data['high'].values
+           train_data_scaled['close'] = train_data['close'].values
+           
            
            # Separar as colunas de meta_X_test
            test_data = test_data[:min_length_test]
-           test_data['pred_lstm_proba'] = meta_X_test[:, 0]
-           test_data['pred_xgb_proba'] = meta_X_test[:, 1]
-           test_data['pred_mlp_proba'] = meta_X_test[:, 2] 
-           test_data['ensemble_signal'] = meta_predictions_proba         
            
-           #features_to_remove_RL_PPO = ['timestamp', 'open', 'high', 'low', 'close', 'signal']
-           selected_columns_RL_PPO = ['pred_lstm_proba', 'pred_xgb_proba', 'pred_mlp_proba','ensemble_signal','low','high','close']
-           train_data_RL_PPO = train_data[selected_columns_RL_PPO]
-           
-           test_data_RL_PPO= test_data[selected_columns_RL_PPO]
+           test_data_features = test_data[['sma_5_diff', 'sma_20_diff', 'sma_50_diff', 'ema_20_diff', 'mean_proportion_BTC', 'std_proportion_BTC', 'proportion_taker_BTC', 'z_score_BTC','cci_20', 'stc', 'roc_10', 'cmo', 'obv', 'mfi', 'tsi_stoch', 'dmi_plus', 'dmi_minus', 'adx']]
+
+            # Escalonar os dados do test_data com o mesmo scaler usado no train_data
+           test_data_scaled = scaler_ppo.transform(test_data_features)
+
+            # Converter de volta para DataFrame para facilitar a manipulação
+           test_data_scaled = pd.DataFrame(test_data_scaled, columns=test_data_features.columns)
+
+            # Adicionar as colunas de probabilidades do ensemble ao test_data escalonado
+           test_data_scaled['pred_lstm_proba'] = meta_X_test[:, 0]
+           test_data_scaled['pred_xgb_proba'] = meta_X_test[:, 1]
+           test_data_scaled['pred_mlp_proba'] = meta_X_test[:, 2]
+
+            # Adicionar a coluna 'ensemble_signal' ao test_data escalonado
+           test_data_scaled['ensemble_signal'] = meta_predictions_proba
+
+            # Adicionar as colunas 'low', 'high' e 'close' ao test_data escalonado
+           test_data_scaled['low'] = test_data['low'].values
+           test_data_scaled['high'] = test_data['high'].values
+           test_data_scaled['close'] = test_data['close'].values
+
+
+            # Criar o conjunto de dados final para o RL PPO
+           test_data_RL_PPO = test_data_scaled[selected_columns_RL_PPO]
+           train_data_RL_PPO = train_data_scaled[selected_columns_RL_PPO]
 
            
            RL_PPO_model = CryptoTradingModel(self.ticker, self.bucket_name)
@@ -105,6 +144,15 @@ class Backtester:
            
            metrics_df = RL_PPO_model.predict_ppo(test_data_RL_PPO)
            print(metrics_df)
+           
+           # Salvar o scaler
+           joblib.dump(scaler_ppo, self.scaler_path_ppo)
+           
+           # Fazer upload do modelo treinado e do scaler para o S3
+           s3_client = boto3.client('s3')
+           s3_client.upload_file(self.scaler_path_ppo, self.bucket_name, self.scaler_key_ppo)
+           
+           
            
                      
            

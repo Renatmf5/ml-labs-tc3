@@ -6,12 +6,13 @@ from xgboost import XGBRegressor
 import boto3
 import numpy as np
 
+
 class XGBoostModelTrainer:
     def __init__(self, ticker, bucket):
         self.regressor_model = XGBRegressor(
-            max_depth=20,  # Aumentar a profundidade máxima
-            learning_rate=0.1,  # Ajustar a taxa de aprendizado
-            n_estimators=2000,  # Aumentar o número de estimadores
+            max_depth=5,  # Aumentar a profundidade máxima
+            learning_rate=0.05,  # Ajustar a taxa de aprendizado
+            n_estimators=500,  # Aumentar o número de estimadores
             objective='reg:squarederror',
             gamma=0,
             random_state=3
@@ -57,9 +58,11 @@ class XGBoostModelTrainer:
         model_path = os.path.join("modelosMLDP", "dataModels", "xgboost_regressor_model.pkl")
         joblib.dump(self.regressor_model, model_path, protocol=4)
         
+        # Configurar o logging
+
         # Fazer upload do modelo treinado para o S3
         s3_client = boto3.client('s3')
-        s3_client.upload_file(model_path, self.bucket, f'{self.subpasta_modelo}/xgboost_regressor_model.pkl')
+        #s3_client.upload_file(model_path, self.bucket, f'{self.subpasta_modelo}/xgboost_regressor_model.pkl')
         
         # Salvar e fazer upload do scaler para o S3
         scaler_path = os.path.join("modelosMLDP", "dataModels", f'{self.ticker}_xgboost_scaler.pkl')

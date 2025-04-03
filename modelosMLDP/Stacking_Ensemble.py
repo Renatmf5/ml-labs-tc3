@@ -55,7 +55,7 @@ class StackingEnsembleModel:
             # Salvar o modelo localmente no formato .keras
             self.meta_model.save(model_path)
 
-            s3.upload_file(model_path, self.bucket_name, key)
+            #s3.upload_file(model_path, self.bucket_name, key)
             print(f"Meta-modelo salvo com sucesso no S3 em: {key}")
         except Exception as e:
             print(f"Erro ao salvar o meta-modelo no S3: {e}")
@@ -97,9 +97,9 @@ class StackingEnsembleModel:
 
     def treinar_meta_modelo(self, X_train_lstm, X_train_xgb, X_train_mlp, y_train):
         meta_X_train, min_length = self.gerar_meta_features(X_train_lstm, X_train_xgb, X_train_mlp, y_train)
-        scaler_ensemble = StandardScaler()
+        scaler_ensemble = MinMaxScaler(feature_range=(0, 1))
         meta_features_standardized = scaler_ensemble.fit_transform(meta_X_train)
-        self.meta_model.fit(meta_features_standardized, y_train[:min_length], epochs=5, batch_size=32, validation_split=0.2)
+        self.meta_model.fit(meta_features_standardized, y_train[:min_length], epochs=3, batch_size=32, validation_split=0.2)
         self.salvar_scaler_ensemble_no_s3(f'{self.subpasta_scaler}/{self.ticker}_ensemble_scaler.pkl', scaler_ensemble)
         self.salvar_meta_modelo_no_s3(f'{self.subpasta_modelo}/ensemble_model.keras')
         return meta_X_train, min_length, scaler_ensemble
